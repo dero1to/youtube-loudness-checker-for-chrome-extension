@@ -44,28 +44,28 @@ YouTube プレイヤーの内部 API からラウドネス正規化情報を取�
 Chrome Extension Manifest V3 の制約上、Service Worker 内で `AudioContext` が使えないため、3 つのコンテキストが協調して動作します。
 
 ```mermaid
-graph TD
-  subgraph content["content.js<br/>(YouTubeページ)"]
+graph LR
+  subgraph content["content.js(YouTubeページ)"]
     c1["メーターUI / Shadow DOM"]
     c2["音量スライダー"]
     c3["YT正規化表示"]
     c4["ドラッグ移動"]
   end
 
-  subgraph background["background.js<br/>(Service Worker)"]
+  subgraph background["background.js(Service Worker)"]
     b1["tabCapture制御"]
     b2["メッセージルーティング"]
     b3["YT API取得 (world:MAIN)"]
   end
 
-  subgraph offscreen["offscreen.js<br/>(Offscreen Document)"]
+  subgraph offscreen["offscreen.js(Offscreen Document)"]
     o1["AudioContext"]
     o2["AudioWorklet"]
     o3["音声計測 / 再生"]
     o4["デバイス変更監視"]
   end
 
-  subgraph processor["loudness-processor.js<br/>(AudioWorklet Processor)"]
+  subgraph processor["loudness-processor.js(AudioWorklet Processor)"]
     p1["LUFSMeter"]
     p2["VUMeter"]
     p3["RMSMeter"]
