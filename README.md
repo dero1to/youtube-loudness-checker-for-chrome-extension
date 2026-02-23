@@ -78,19 +78,52 @@ graph TD
 
 ### 処理の流れ
 
-1. **アイコンクリック** → `background.js` が `chrome.tabCapture.getMediaStreamId()` でタブ音声のストリーム ID を取得
-2. **Offscreen Document 作成** → `offscreen.html` / `offscreen.js` が音声処理用のドキュメントとして起動
-3. **音声キャプチャ開始** → `offscreen.js` がストリーム ID から `getUserMedia()` で音声ストリームを取得し、`AudioContext` に接続
-4. **AudioWorklet で計測** → `loudness-processor.js` がオーディオスレッド上で 128 サンプルごとに LUFS / VU / RMS を計算、約 100ms ごとに結果を返す
-5. **結果を表示** → `offscreen.js` → `background.js` → `content.js` とメッセージを中継し、YouTube 画面上の Shadow DOM ウィジェットに反映
-6. **YouTube 正規化情報** → `background.js` が `chrome.scripting.executeScript({ world: "MAIN" })` で YouTube プレイヤー API にアクセスし、ラウドネス正規化データを取得
+```mermaid
+sequenceDiagram
+    participant User
+    participant BG as background.js
+    participant OS as offscreen.js
+    participant WK as loudness-processor.js
+    participant CS as content.js
+    participant YT as YouTube Player API
+
+    User->>BG: アイコンクリック
+    BG->>CS: content.js を注入
+    BG->>BG: tabCapture.getMediaStreamId()
+    BG->>OS: Offscreen Document 作成 + streamId 送信
+    OS->>OS: getUserMedia() で音声取得
+    OS->>OS: AudioContext + オーディオグラフ構築
+    OS->>WK: AudioWorklet に接続
+    BG->>CS: capture-started
+
+    loop 約100msごと
+        WK->>WK: LUFS / VU / RMS 計算
+        WK->>OS: 計測結果 (postMessage)
+        OS->>BG: loudness-data
+        BG->>CS: loudness-data
+        CS->>CS: Shadow DOM ウィジェットに反映
+    end
+
+    Note over CS,YT: YouTube 正規化情報の取得<br>（リトライあり・最大5回）
+    CS->>BG: get-yt-loudness
+    BG->>YT: executeScript(world: MAIN)
+    YT-->>BG: loudnessDb / perceptualLoudnessDb
+    BG-->>CS: 正規化情報を表示
+
+    Note over CS,YT: SPA遷移時（yt-navigate-finish）は<br>正規化情報を再取得
+```
 
 ### オーディオグラフ（並列接続）
 
-```
-                  ┌─► workletNode (計測のみ)
-source ──────────┤
-                  └─► gainNode ──► destination (スピーカー)
+```mermaid
+graph LR
+    source["source<br/>(MediaStreamSource)"]
+    worklet["workletNode<br/>(計測のみ)"]
+    gain["gainNode<br/>(音量調整)"]
+    dest["destination<br/>(スピーカー)"]
+
+    source --> worklet
+    source --> gain --> dest
 ```
 
 計測パスと再生パスを並列に接続することで、ボリュームスライダーで再生音量を変えても計測値に影響しません。音声出力デバイスの変更時は AudioContext を自動で再構築します。
